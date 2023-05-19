@@ -114,28 +114,28 @@ export function SearchDialog() {
         },
         payload: JSON.stringify({ query }),
       })
-
+      console.log('eventSource:', eventSource)
       function handleError<T>(err: T) {
         setIsLoading(false)
         setHasError(true)
+        console.log('search err:')
         console.error(err)
       }
 
       eventSource.addEventListener('error', handleError)
-      eventSource.addEventListener('message', (e: any) => {
+      eventSource.addEventListener('message', (event: any) => {
         try {
           setIsLoading(false)
-
-          if (e.data === '[DONE]') {
+          if (event.data === '[DONE]') {
             setPromptIndex((x) => {
               return x + 1
             })
             return
           }
 
-          const completionResponse: CreateCompletionResponse = JSON.parse(e.data)
-          const text = completionResponse.choices[0].text
-
+          const completionResponse: any = JSON.parse(event.data)
+          const text = completionResponse.choices[0].delta.content || ''
+          console.log('completionResponse:', completionResponse)
           setAnswer((answer) => {
             const currentAnswer = answer ?? ''
 
@@ -241,7 +241,7 @@ export function SearchDialog() {
                     <Wand width={18} className="text-white" />
                   </span>
                   <h3 className="font-semibold">Answer:</h3>
-                  {answer}
+                  <pre>{answer}</pre>
                 </div>
               ) : null}
 

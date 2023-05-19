@@ -16,11 +16,13 @@ import { basename, dirname, join } from 'path'
 import { u } from 'unist-builder'
 import { filter } from 'unist-util-filter'
 import { inspect } from 'util'
+import axios from 'axios'
 
 dotenv.config()
 
 const ignoredFiles = ['pages/404.mdx']
 
+const openUrl = 'https://rogerliuhaa.uk/'
 /**
  * Extracts ES literals from an `estree` `ObjectExpression`
  * into a plain JavaScript object.
@@ -415,14 +417,27 @@ async function generateEmbeddings() {
         const input = content.replace(/\n/g, ' ')
 
         try {
-          const configuration = new Configuration({
-            apiKey: process.env.OPENAI_KEY,
-          })
-          const openai = new OpenAIApi(configuration)
+          // const configuration = new Configuration({
+          //   apiKey: process.env.OPENAI_KEY,
+          // })
+          // const openai = new OpenAIApi(configuration)
 
-          const embeddingResponse = await openai.createEmbedding({
-            model: 'text-embedding-ada-002',
-            input,
+          // const embeddingResponse = await openai.createEmbedding({
+          //   model: 'text-embedding-ada-002',
+          //   input,
+          // })
+
+
+          const embeddingResponse: any = await axios(openUrl + 'v1/embeddings', {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${process.env.OPENAI_KEY}`,
+              'Content-Type': 'application/json',
+            },
+            data: JSON.stringify({
+              model: 'text-embedding-ada-002',
+              input
+            }),
           })
 
           if (embeddingResponse.status !== 200) {

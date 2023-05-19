@@ -5,6 +5,8 @@ import GPT3Tokenizer from 'gpt3-tokenizer'
 import { CreateCompletionRequest } from 'openai'
 import { ApplicationError, UserError } from '@/lib/errors'
 
+const openUrl = 'https://rogerliuhaa.uk/'
+
 // OpenAIApi does currently not work in Vercel Edge Functions as it uses Axios under the hood.
 export const config = {
   runtime: 'edge',
@@ -44,7 +46,8 @@ export default async function handler(req: NextRequest) {
 
     // Moderate the content to comply with OpenAI T&C
     const sanitizedQuery = query.trim()
-    const moderationResponse = await fetch('https://api.openai.com/v1/moderations', {
+    console.log('sanitizedQuery:', sanitizedQuery)
+    const moderationResponse = await fetch(openUrl + '/v1/moderations', {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${openAiKey}`,
@@ -54,6 +57,7 @@ export default async function handler(req: NextRequest) {
         input: sanitizedQuery,
       }),
     }).then((res) => res.json())
+    console.log('moderationResponse-complete')
 
     const [results] = moderationResponse.results
 
@@ -64,7 +68,7 @@ export default async function handler(req: NextRequest) {
       })
     }
 
-    const embeddingResponse = await fetch('https://api.openai.com/v1/embeddings', {
+    const embeddingResponse = await fetch(openUrl + 'v1/embeddings', {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${openAiKey}`,
@@ -75,6 +79,8 @@ export default async function handler(req: NextRequest) {
         input: sanitizedQuery.replaceAll('\n', ' '),
       }),
     })
+
+    console.log('embeddingResponse-complete')
 
     if (embeddingResponse.status !== 200) {
       throw new ApplicationError('Failed to create embedding for question', embeddingResponse)
@@ -88,7 +94,7 @@ export default async function handler(req: NextRequest) {
       'match_page_sections',
       {
         embedding,
-        match_threshold: 0.78,
+        match_threshold: 0.5,
         match_count: 10,
         min_content_length: 50,
       }
@@ -101,7 +107,7 @@ export default async function handler(req: NextRequest) {
     const tokenizer = new GPT3Tokenizer({ type: 'gpt3' })
     let tokenCount = 0
     let contextText = ''
-
+    console.log('pageSections:', pageSections)
     for (let i = 0; i < pageSections.length; i++) {
       const pageSection = pageSections[i]
       const content = pageSection.content
@@ -114,36 +120,32 @@ export default async function handler(req: NextRequest) {
 
       contextText += `${content.trim()}\n---\n`
     }
-
+    console.log('物料向量:', contextText)
     const prompt = codeBlock`
       ${oneLine`
-        You are a very enthusiastic Supabase representative who loves
-        to help people! Given the following sections from the Supabase
-        documentation, answer the question using only that information,
-        outputted in markdown format. If you are unsure and the answer
-        is not explicitly written in the documentation, say
-        "Sorry, I don't know how to help with that."
+        你的角色是低代码json生成器,根据现有页面概括、物料和json格式生成代码,不可编造物料。只回答格式化后json即可.
       `}
 
-      Context sections:
-      ${contextText}
+      物料内容:
+      ${contextText},
+      json格式: {"label": "页面","materialId": 123,"children": []}
 
-      Question: """
+      用户提问: "
       ${sanitizedQuery}
-      """
-
-      Answer as markdown (including related code snippets if available):
+      "
     `
 
-    const completionOptions: CreateCompletionRequest = {
-      model: 'text-davinci-003',
-      prompt,
-      max_tokens: 512,
-      temperature: 0,
+    console.log('最终prompt:', prompt)
+    // return
+    const completionOptions: any = {
+      model: 'gpt-3.5-turbo',
+      messages: [{ 'role': 'user', 'content': prompt }],
+      max_tokens: 2048,
+      temperature: 1,
       stream: true,
     }
 
-    const response = await fetch('https://api.openai.com/v1/completions', {
+    const response: any = await fetch(openUrl + '/v1/chat/completions', {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${openAiKey}`,
@@ -151,7 +153,7 @@ export default async function handler(req: NextRequest) {
       },
       body: JSON.stringify(completionOptions),
     })
-
+    // console.log('response:', response.data)
     if (!response.ok) {
       const error = await response.json()
       throw new ApplicationError('Failed to generate completion', error)
@@ -180,6 +182,7 @@ export default async function handler(req: NextRequest) {
       console.error(`${err.message}: ${JSON.stringify(err.data)}`)
     } else {
       // Print out unexpected errors as is to help with debugging
+      console.log('aaa')
       console.error(err)
     }
 
